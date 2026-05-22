@@ -36,7 +36,7 @@ scripts/apply_vllm_compose.sh \
   --allow-model-downloads
 ```
 
-The Compose template binds `127.0.0.1` unless the plan renderer is given another bind address.
+The Compose template binds `127.0.0.1` unless the plan renderer is given another bind address. It should also pin `NVIDIA_VISIBLE_DEVICES` from the selected fit GPUs instead of requesting all GPUs.
 If the deployment includes more than one model endpoint, the planner should choose a shared host Hugging Face cache path so the containers reuse already-downloaded weights.
 
 ## Checks Before Apply
@@ -45,6 +45,7 @@ If the deployment includes more than one model endpoint, the planner should choo
 - Verify the host driver and selected image can work together.
 - Review whether `--tensor-parallel-size`, max model length, GPU-memory utilization, quantization flags, and trust-remote-code policy are appropriate.
 - Record any Hugging Face token handling and cache path choice without placing secrets in reports. For multi-endpoint deployments, use a shared host cache path and record it in the plan. Treat the rendered environment file as a secret once a token is added; the renderer and apply path set restrictive file permissions, but reports should keep only paths and commands.
+- Record the selected GPU device list from the fit result. Do not use `gpus: all` in the Compose baseline.
 - If replacing a live service, capture its start command, config, image/binary revision, port, cache path, and smoke-test result first.
 
 ## Baseline Boundaries

@@ -5,9 +5,9 @@ services:
     container_name: "${SERVICE_NAME}"
     ipc: host
     runtime: nvidia
-    gpus: all
     restart: unless-stopped
     environment:
+      NVIDIA_VISIBLE_DEVICES: "${NVIDIA_VISIBLE_DEVICES}"
       HF_TOKEN: "${HF_TOKEN:-}"
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
     volumes:

@@ -118,6 +118,7 @@ remote_exec "umask 077 && mkdir -p '$remote_dir' && chmod 700 '$remote_dir'"
 remote_copy "$compose_file" "$remote_compose"
 remote_copy "$env_file" "$remote_env"
 hf_cache_path=$(awk -F= '$1=="HF_CACHE"{print substr($0, length($1)+2); exit}' "$env_file")
+nvidia_visible_devices=$(awk -F= '$1=="NVIDIA_VISIBLE_DEVICES"{print substr($0, length($1)+2); exit}' "$env_file")
 if [[ -n "${hf_cache_path:-}" && "$hf_cache_path" == /* ]]; then
   remote_exec "umask 077 && mkdir -p '$hf_cache_path' && chmod 700 '$hf_cache_path'"
 fi
@@ -126,7 +127,7 @@ remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' config
 remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' up -d"
 compose_ps=$(remote_exec "docker compose --env-file '$remote_env' -f '$remote_compose' ps")
 
-python3 - "$state_out" "$compose_file" "$env_file" "$replace_existing" "$remote_dir" "$remote_compose" "$remote_env" "$compose_ps" "${hf_cache_path:-}" <<'PY'
+python3 - "$state_out" "$compose_file" "$env_file" "$replace_existing" "$remote_dir" "$remote_compose" "$remote_env" "$compose_ps" "${hf_cache_path:-}" "${nvidia_visible_devices:-}" <<'PY'
 from __future__ import annotations
 
 import datetime as dt
@@ -134,7 +135,7 @@ import json
 import shlex
 import sys
 
-state_out, compose_file, env_file, replace_existing, remote_dir, remote_compose, remote_env, compose_ps, hf_cache_path = sys.argv[1:]
+state_out, compose_file, env_file, replace_existing, remote_dir, remote_compose, remote_env, compose_ps, hf_cache_path, nvidia_visible_devices = sys.argv[1:]
 state = {
     "schema_version": "nvidia-applied-deployment-state/v1",
     "applied_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -158,6 +159,8 @@ state = {
 }
 if hf_cache_path:
     state["shared_hf_cache_path"] = hf_cache_path
+if nvidia_visible_devices:
+    state["nvidia_visible_devices"] = nvidia_visible_devices
 with open(state_out, "w", encoding="utf-8") as handle:
     json.dump(state, handle, indent=2, sort_keys=True)
     handle.write("\n")

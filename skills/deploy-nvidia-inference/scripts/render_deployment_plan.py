@@ -128,6 +128,7 @@ def main() -> None:
         },
         "deployment_topology": {
             "model_endpoint_count": deployment_endpoint_count(workload),
+            "selected_gpu_devices": selected_gpu_devices(fit),
             "shared_hf_cache_path": shared_hf_cache_path(host, workload),
         },
         "fit_estimate": fit,
@@ -158,7 +159,7 @@ def main() -> None:
     }
 
     if runtime == "vllm":
-        rendered = render_vllm(args, host, workload, candidate, host_port)
+        rendered = render_vllm(args, host, workload, candidate, fit, host_port)
         if args.compose_out:
             Path(args.compose_out).write_text(rendered["compose"], encoding="utf-8")
         if args.env_out:
@@ -218,6 +219,7 @@ def render_vllm(
     host: dict[str, Any],
     workload: dict[str, Any],
     candidate: dict[str, Any],
+    fit: dict[str, Any],
     host_port: int,
 ) -> dict[str, str]:
     template = (TEMPLATE_DIR / "docker-compose.vllm.yaml.tmpl").read_text(encoding="utf-8")
@@ -255,6 +257,7 @@ def render_vllm(
         "@@TENSOR_PARALLEL_SIZE@@": str(
             as_int(nested(candidate, "deployment", "tensor_parallel_size", default=1), 1)
         ),
+        "@@NVIDIA_VISIBLE_DEVICES@@": selected_gpu_devices(fit),
         "@@HF_CACHE@@": shared_hf_cache_path(host, workload),
     }
     for token, value in env_values.items():
@@ -322,6 +325,14 @@ def shared_hf_cache_path(host: dict[str, Any], workload: dict[str, Any]) -> str:
     if remote_user:
         return f"/home/{remote_user}/.cache/huggingface"
     return "/var/lib/huggingface-cache"
+
+
+def selected_gpu_devices(fit: dict[str, Any]) -> str:
+    selected = nested(fit, "selected_gpus", default=[]) or []
+    if not isinstance(selected, list) or not selected:
+        return "all"
+    devices = [str(gpu.get("index")) for gpu in selected if gpu.get("index") is not None]
+    return ",".join(devices) if devices else "all"
 
 
 def slug(value: str) -> str:
