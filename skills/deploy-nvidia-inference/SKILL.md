@@ -1,6 +1,6 @@
 ---
 name: deploy-nvidia-inference
-description: Discover a single remote NVIDIA Linux host over SSH, build refreshable model/runtime recommendations, plan and apply safe inference deployments, and verify OpenAI-compatible endpoints with vLLM, SGLang, TensorRT-LLM/trtllm-serve, llama.cpp, or Ollama. Use when Codex needs to assess NVIDIA GPU fit, choose an inference serving path for a workload, deploy a remote endpoint, benchmark it, or document rollback guidance without treating one runtime or parameter count as universally optimal.
+description: Discover a single remote NVIDIA Linux host over SSH, build refreshable model/runtime recommendations, plan and apply safe inference deployments, and verify OpenAI-compatible endpoints with vLLM, SGLang, TensorRT-LLM/trtllm-serve, llama.cpp, or Ollama. Use when an agent needs to assess NVIDIA GPU fit, choose an inference serving path for a workload, deploy a remote endpoint, benchmark it, or document rollback guidance without treating one runtime or parameter count as universally optimal.
 ---
 
 # Deploy NVIDIA Inference
