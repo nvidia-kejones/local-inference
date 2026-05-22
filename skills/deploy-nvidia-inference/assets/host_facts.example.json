@@ -1,0 +1,38 @@
+{
+  "schema_version": "nvidia-host-facts/v1",
+  "fact_scope": "synthetic_example",
+  "source": {
+    "collector": "example",
+    "collected_at_utc": "replace-after-probe"
+  },
+  "host": {
+    "hostname": "replace-host",
+    "memory": {
+      "total_bytes": 274877906944,
+      "available_bytes": 206158430208
+    }
+  },
+  "nvidia": {
+    "available": true,
+    "driver_version": "replace-after-probe",
+    "gpus": [
+      {
+        "index": 0,
+        "uuid": "GPU-replace",
+        "name": "Replace GPU",
+        "compute_capability": "replace",
+        "mig_mode": null,
+        "vram_total_bytes": 51539607552,
+        "vram_free_bytes": 47244640256
+      }
+    ]
+  },
+  "containers": {
+    "docker": {
+      "available": true
+    },
+    "nvidia_container_toolkit": {
+      "available": true
+    }
+  }
+}

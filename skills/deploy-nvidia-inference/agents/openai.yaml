@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy NVIDIA Inference"
+  short_description: "Plan and deploy NVIDIA inference endpoints"
+  default_prompt: "Use $deploy-nvidia-inference to discover a remote NVIDIA host and plan a safe inference deployment."

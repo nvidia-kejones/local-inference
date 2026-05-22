@@ -1,0 +1,23 @@
+schema_version: nvidia-workload-profile/v1
+intent:
+  purpose: chat-and-agent-serving
+  quality_priority: 0.8
+  latency_priority: 0.6
+  throughput_priority: 0.7
+  operational_simplicity_priority: 0.4
+  vram_constraint_priority: 0.3
+serving:
+  target_context_tokens: 8192
+  expected_concurrent_sequences: 4
+  max_batch_total_tokens: 32768
+  expected_live_tokens: 32768
+  patterns:
+    prefix_reuse: moderate
+    structured_outputs: true
+    agentic: true
+endpoint:
+  prefer_openai_compatible: true
+  external_exposure: false
+constraints:
+  deployment_license_reviewed: false
+  allowed_model_sources: current-primary-model-repos-only

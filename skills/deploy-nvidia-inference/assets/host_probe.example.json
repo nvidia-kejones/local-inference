@@ -1,0 +1,135 @@
+{
+  "schema_version": "nvidia-host-probe/raw-v1",
+  "collector": "example",
+  "collected_at_utc": "replace-after-probe",
+  "remote_hostname": "replace-host",
+  "remote_user": "replace-user",
+  "commands": {
+    "hostname_fqdn": {
+      "command": ["hostname", "-f"],
+      "returncode": 0,
+      "stdout": "replace-host.example\n",
+      "stderr": ""
+    },
+    "os_release": {
+      "command": ["cat", "/etc/os-release"],
+      "returncode": 0,
+      "stdout": "NAME=\"Example Linux\"\nPRETTY_NAME=\"Example Linux 1\"\n",
+      "stderr": ""
+    },
+    "kernel": {
+      "command": ["uname", "-a"],
+      "returncode": 0,
+      "stdout": "Linux replace-host 6.0.0 example x86_64 GNU/Linux\n",
+      "stderr": ""
+    },
+    "lscpu": {
+      "command": ["lscpu"],
+      "returncode": 0,
+      "stdout": "Architecture: x86_64\nCPU(s): 32\nModel name: Example CPU\nSocket(s): 1\nCore(s) per socket: 16\n",
+      "stderr": ""
+    },
+    "meminfo": {
+      "command": ["cat", "/proc/meminfo"],
+      "returncode": 0,
+      "stdout": "MemTotal:       268435456 kB\nMemAvailable:   201326592 kB\nSwapTotal:              0 kB\n",
+      "stderr": ""
+    },
+    "disk": {
+      "command": ["df", "-B1", "-P", "/", "/home", "/var/lib/docker"],
+      "returncode": 0,
+      "stdout": "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/root 1000000000000 100000000000 900000000000 10% /\n",
+      "stderr": ""
+    },
+    "nvidia_smi_table": {
+      "command": ["nvidia-smi"],
+      "returncode": 0,
+      "stdout": "NVIDIA-SMI example Driver Version: 000.00 CUDA Version: 12.8\n",
+      "stderr": ""
+    },
+    "nvidia_smi_list": {
+      "command": ["nvidia-smi", "-L"],
+      "returncode": 0,
+      "stdout": "GPU 0: Replace GPU (UUID: GPU-replace)\n",
+      "stderr": ""
+    },
+    "nvidia_smi_gpu_query_extended": {
+      "command": ["nvidia-smi", "--query-gpu=...", "--format=csv,noheader,nounits"],
+      "returncode": 0,
+      "stdout": "0, Replace GPU, GPU-replace, 49152, 45056, 000.00, 9.0, Disabled\n",
+      "stderr": ""
+    },
+    "nvidia_smi_compute_apps": {
+      "command": ["nvidia-smi", "--query-compute-apps=...", "--format=csv,noheader,nounits"],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "nvidia_smi_topology": {
+      "command": ["nvidia-smi", "topo", "-m"],
+      "returncode": 0,
+      "stdout": "GPU0 CPU Affinity\nGPU0 X 0-31\n",
+      "stderr": ""
+    },
+    "nvidia_smi_p2p_nvlink": {
+      "command": ["nvidia-smi", "topo", "-p2p", "n"],
+      "returncode": 0,
+      "stdout": "GPU0 X\n",
+      "stderr": ""
+    },
+    "nvidia_driver_proc": {
+      "command": ["cat", "/proc/driver/nvidia/version"],
+      "returncode": 0,
+      "stdout": "NVRM version: replace\n",
+      "stderr": ""
+    },
+    "docker_version": {
+      "command": ["docker", "version", "--format", "{{json .}}"],
+      "returncode": 0,
+      "stdout": "{\"Server\":{\"Version\":\"replace\"}}\n",
+      "stderr": ""
+    },
+    "docker_runtimes": {
+      "command": ["docker", "info", "--format", "{{json .Runtimes}}"],
+      "returncode": 0,
+      "stdout": "{\"io.containerd.runc.v2\":{},\"nvidia\":{}}\n",
+      "stderr": ""
+    },
+    "containerd_version": {
+      "command": ["containerd", "--version"],
+      "returncode": 0,
+      "stdout": "containerd replace\n",
+      "stderr": ""
+    },
+    "podman_version": {
+      "command": ["podman", "--version"],
+      "returncode": 127,
+      "stdout": "",
+      "stderr": "podman not found"
+    },
+    "nvidia_ctk_version": {
+      "command": ["nvidia-ctk", "--version"],
+      "returncode": 0,
+      "stdout": "NVIDIA Container Toolkit CLI version replace\n",
+      "stderr": ""
+    },
+    "nvidia_container_cli_version": {
+      "command": ["nvidia-container-cli", "--version"],
+      "returncode": 0,
+      "stdout": "cli-version: replace\n",
+      "stderr": ""
+    },
+    "listening_ports": {
+      "command": ["ss", "-H", "-ltnup"],
+      "returncode": 0,
+      "stdout": "tcp LISTEN 0 4096 127.0.0.1:22 0.0.0.0:*\n",
+      "stderr": ""
+    },
+    "inference_processes": {
+      "command": ["ps", "-eo", "pid,user,comm"],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+}

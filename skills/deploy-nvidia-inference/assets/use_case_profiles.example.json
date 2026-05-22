@@ -1,0 +1,140 @@
+{
+  "schema_version": "nvidia-use-case-profiles/v1",
+  "profiles": [
+    {
+      "id": "interactive-chat",
+      "label": "Interactive chat",
+      "description": "Balanced assistant quality and responsiveness for a small interactive user set.",
+      "workload": {
+        "schema_version": "nvidia-workload-profile/v1",
+        "intent": {
+          "purpose": "interactive-chat",
+          "quality_priority": 0.8,
+          "latency_priority": 0.8,
+          "throughput_priority": 0.4,
+          "operational_simplicity_priority": 0.5,
+          "vram_constraint_priority": 0.4
+        },
+        "serving": {
+          "target_context_tokens": 8192,
+          "expected_concurrent_sequences": 2,
+          "max_batch_total_tokens": 16384,
+          "expected_live_tokens": 16384,
+          "patterns": {
+            "prefix_reuse": "low",
+            "structured_outputs": false,
+            "agentic": false
+          }
+        }
+      }
+    },
+    {
+      "id": "code-assistant",
+      "label": "Code assistant",
+      "description": "Coding and repository assistance with longer prompts and tool-adjacent responses.",
+      "workload": {
+        "schema_version": "nvidia-workload-profile/v1",
+        "intent": {
+          "purpose": "code-assistant",
+          "quality_priority": 0.9,
+          "latency_priority": 0.6,
+          "throughput_priority": 0.5,
+          "operational_simplicity_priority": 0.4,
+          "vram_constraint_priority": 0.4
+        },
+        "serving": {
+          "target_context_tokens": 16384,
+          "expected_concurrent_sequences": 2,
+          "max_batch_total_tokens": 32768,
+          "expected_live_tokens": 32768,
+          "patterns": {
+            "prefix_reuse": "moderate",
+            "structured_outputs": true,
+            "agentic": true
+          }
+        }
+      }
+    },
+    {
+      "id": "rag-long-context",
+      "label": "RAG long context",
+      "description": "Retrieval-heavy prompts with longer live context and modest concurrency.",
+      "workload": {
+        "schema_version": "nvidia-workload-profile/v1",
+        "intent": {
+          "purpose": "rag-long-context",
+          "quality_priority": 0.75,
+          "latency_priority": 0.5,
+          "throughput_priority": 0.6,
+          "operational_simplicity_priority": 0.4,
+          "vram_constraint_priority": 0.5
+        },
+        "serving": {
+          "target_context_tokens": 32768,
+          "expected_concurrent_sequences": 2,
+          "max_batch_total_tokens": 65536,
+          "expected_live_tokens": 65536,
+          "patterns": {
+            "prefix_reuse": "moderate",
+            "structured_outputs": false,
+            "agentic": false
+          }
+        }
+      }
+    },
+    {
+      "id": "structured-agent",
+      "label": "Structured agent",
+      "description": "Agentic requests with structured outputs, prefix reuse, and moderate concurrency.",
+      "workload": {
+        "schema_version": "nvidia-workload-profile/v1",
+        "intent": {
+          "purpose": "structured-agent",
+          "quality_priority": 0.8,
+          "latency_priority": 0.6,
+          "throughput_priority": 0.8,
+          "operational_simplicity_priority": 0.3,
+          "vram_constraint_priority": 0.4
+        },
+        "serving": {
+          "target_context_tokens": 8192,
+          "expected_concurrent_sequences": 8,
+          "max_batch_total_tokens": 65536,
+          "expected_live_tokens": 65536,
+          "patterns": {
+            "prefix_reuse": "high",
+            "structured_outputs": true,
+            "agentic": true
+          }
+        }
+      }
+    },
+    {
+      "id": "constrained-quantized",
+      "label": "Constrained quantized",
+      "description": "A small-host path that values fit and portability over peak serving throughput.",
+      "workload": {
+        "schema_version": "nvidia-workload-profile/v1",
+        "intent": {
+          "purpose": "constrained-quantized",
+          "quality_priority": 0.6,
+          "latency_priority": 0.5,
+          "throughput_priority": 0.3,
+          "operational_simplicity_priority": 0.7,
+          "vram_constraint_priority": 0.95
+        },
+        "serving": {
+          "target_context_tokens": 4096,
+          "expected_concurrent_sequences": 1,
+          "max_batch_total_tokens": 4096,
+          "expected_live_tokens": 4096,
+          "patterns": {
+            "prefix_reuse": "low",
+            "structured_outputs": false,
+            "agentic": false
+          }
+        }
+      }
+    }
+  ]
+}

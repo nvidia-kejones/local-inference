@@ -1,0 +1,15 @@
+[Unit]
+Description=@@SERVICE_NAME@@ NVIDIA inference Compose stack
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@@REMOTE_DIR@@
+ExecStart=/usr/bin/docker compose --env-file deployment.env -f docker-compose.yaml up -d
+ExecStop=/usr/bin/docker compose --env-file deployment.env -f docker-compose.yaml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

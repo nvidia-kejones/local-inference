@@ -1,0 +1,68 @@
+{
+  "schema_version": "nvidia-candidate-set/v1",
+  "refresh_notes": [
+    "Replace this illustrative candidate set after checking current runtime docs, model repo metadata, license terms, quantization path, and container image revision.",
+    "Do not preserve a permanent latest-model list in the skill."
+  ],
+  "candidates": [
+    {
+      "id": "replace-org/replace-model-vllm",
+      "model_id": "replace-org/replace-model",
+      "model_revision": "",
+      "runtime": "vllm",
+      "format": "huggingface",
+      "served_model_name": "replace-model",
+      "quality_fit_score": 0.5,
+      "quality_fit_scores": {
+        "interactive-chat": 0.5,
+        "code-assistant": 0.5,
+        "structured-agent": 0.5
+      },
+      "quality_evidence": {
+        "source": "replace with workload-aligned quality source such as an observed Arena open-source category view",
+        "observed_at": "",
+        "note": "quality evidence is a prior, not deployability evidence"
+      },
+      "max_context_tokens": 8192,
+      "weights": {
+        "parameters_billion": 8,
+        "precision": "bf16",
+        "quantization": "bf16",
+        "storage_factor": 1.03
+      },
+      "kv_cache": {
+        "num_layers": 32,
+        "hidden_size": 4096,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 8,
+        "dtype_bytes": 2
+      },
+      "runtime_support": {
+        "validated": false,
+        "score": 0.35,
+        "evidence": "refresh from primary runtime docs and a pinned model repo"
+      },
+      "license": {
+        "deployment_allowed": true,
+        "deployment_score": 0.5,
+        "evidence": "replace after license review"
+      },
+      "deployment": {
+        "container_image": "vllm/vllm-openai:pin-to-digest",
+        "host_port": 8000,
+        "tensor_parallel_size": 1,
+        "vllm_args": [
+          "--gpu-memory-utilization",
+          "0.88"
+        ]
+      },
+      "runtime_estimates": {
+        "overhead_gib": 2,
+        "overhead_fraction": 0.08,
+        "vram_reserve_fraction": 0.15,
+        "vram_reserve_gib_per_gpu": 2,
+        "batch_workspace_bytes_per_token": 0
+      }
+    }
+  ]
+}

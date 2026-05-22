@@ -1,0 +1,27 @@
+{
+  "schema_version": "nvidia-benchmark-profiles/v1",
+  "profiles": {
+    "smoke": {
+      "requests": 4,
+      "concurrency": 1,
+      "temperature": 0,
+      "max_tokens": 48,
+      "timeout_seconds": 120,
+      "prompts": [
+        "Return a three-item JSON array of GPU inference checks.",
+        "Summarize why KV cache size changes with live tokens in two sentences."
+      ]
+    },
+    "prefix-heavy": {
+      "requests": 12,
+      "concurrency": 4,
+      "temperature": 0,
+      "max_tokens": 64,
+      "timeout_seconds": 180,
+      "prompts": [
+        "System context: a deployment review covers drivers, containers, models, and rollback. User task: list two rollback checks.",
+        "System context: a deployment review covers drivers, containers, models, and rollback. User task: list two verification checks."
+      ]
+    }
+  }
+}
