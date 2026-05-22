@@ -4,7 +4,10 @@ Use discovery to learn what the remote NVIDIA Linux host exposes before deciding
 
 ## Probe Coverage
 
-`scripts/probe_remote_host.sh` opens SSH and runs remote `python3` to capture command, return code, stdout, and stderr for read-only probes:
+`scripts/probe_remote_host.sh` opens the declared remote connection and runs remote `python3` to capture command, return code, stdout, and stderr for read-only probes:
+
+- Standard SSH connections use `ssh`.
+- Brev-managed instances use `brev exec` for the probe payload and `brev copy` or `brev port-forward` in follow-on workflows.
 
 - GPU list, UUIDs, total/free VRAM, driver version, compute capability when the driver exposes it, and MIG mode when exposed.
 - `nvidia-smi` topology/P2P output for NVLink and peer hints.

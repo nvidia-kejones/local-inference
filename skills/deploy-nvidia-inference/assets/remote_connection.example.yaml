@@ -1,0 +1,6 @@
+# Use one of the supported connection forms:
+# command: ssh user@gpu-host
+# command: ssh -p 2222 user@gpu-host
+# command: brev shell my-instance
+# command: brev ssh my-instance
+command: ssh user@gpu-host

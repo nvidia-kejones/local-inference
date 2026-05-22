@@ -59,6 +59,22 @@ npx skills update -p
 
 If you installed from a local clone, update the clone first and then rerun `npx skills update` from the same project or global context.
 
+## Connection
+
+Keep the remote connection in `outputs/deploy-nvidia-inference/<run-id>/remote_connection.yaml`.
+
+```yaml
+command: ssh user@gpu-host
+```
+
+For Brev-managed instances, use a Brev command instead:
+
+```yaml
+command: brev shell my-instance
+```
+
+When the connection is Brev-managed, the skill uses `brev exec` for remote commands and `brev copy` for file transfer.
+
 ## Use
 
 Ask the agent to use the skill with a concrete host and goal:
@@ -121,6 +137,7 @@ Use $deploy-nvidia-inference to discover user@gpu-host over SSH and recommend th
 
 The skill keeps recommendation and deployment state separate. During use it aims to produce:
 
+- `outputs/deploy-nvidia-inference/<run-id>/remote_connection.yaml`
 - `outputs/deploy-nvidia-inference/<run-id>/host_probe.raw.json`
 - `outputs/deploy-nvidia-inference/<run-id>/host_facts.json`
 - `outputs/deploy-nvidia-inference/<run-id>/workload_profile.yaml`
@@ -142,7 +159,10 @@ The skill normally drives these helpers, but the core read-only path can also be
 cd skills/deploy-nvidia-inference
 run_dir=../../outputs/deploy-nvidia-inference/$(date -u +%Y%m%dT%H%M%SZ)-gpu-host
 mkdir -p "$run_dir"
-scripts/probe_remote_host.sh user@gpu-host > "$run_dir/host_probe.raw.json"
+cat > "$run_dir/remote_connection.yaml" <<'EOF'
+command: ssh user@gpu-host
+EOF
+scripts/probe_remote_host.sh --connection-file "$run_dir/remote_connection.yaml" > "$run_dir/host_probe.raw.json"
 python3 scripts/normalize_host_facts.py "$run_dir/host_probe.raw.json" \
   --out "$run_dir/host_facts.json"
 python3 scripts/recommend_use_cases.py \

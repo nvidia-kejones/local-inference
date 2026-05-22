@@ -13,6 +13,11 @@ from typing import Any
 
 from common_io import as_int, load_structured, nested, write_yaml
 from fitlib import estimate_fit
+from remote_connection import (
+    normalize_connection,
+    remote_exec_command,
+    remote_port_forward_command,
+)
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -55,6 +60,7 @@ def main() -> None:
     parser.add_argument("--compose-out", help="write rendered vLLM Compose YAML here")
     parser.add_argument("--env-out", help="write rendered vLLM environment file here")
     parser.add_argument("--service-name", default="nvidia-inference")
+    parser.add_argument("--connection-file", help="YAML or JSON remote connection spec")
     parser.add_argument("--remote-dir", help="remote working dir relative to SSH login home")
     parser.add_argument("--ssh-target", default="<ssh-target>")
     parser.add_argument("--bind", default="127.0.0.1")
@@ -70,6 +76,7 @@ def main() -> None:
     model_id = candidate.get("model_id") or candidate.get("id")
     if not model_id:
         raise SystemExit("selected candidate needs model_id or id")
+    connection = load_connection(args)
 
     remote_dir = args.remote_dir or f".local/share/codex-inference/{slug(args.service_name)}"
     host_port = args.port or as_int(nested(candidate, "deployment", "host_port", default=0), 0)
@@ -97,6 +104,7 @@ def main() -> None:
             "host_facts": args.host,
             "workload_profile": args.workload,
             "recommendation_input": args.candidate,
+            "remote_connection": args.connection_file or args.ssh_target,
             "applied_state": "applied_deployment_state.json",
             "verification_report": "verification_report.json",
         },
@@ -122,12 +130,12 @@ def main() -> None:
         "apply_blockers": apply_blockers(runtime, pinning),
         "commands": {
             "preflight": [
-                ssh_command(args.ssh_target, "nvidia-smi -L"),
-                ssh_command(args.ssh_target, "docker compose version"),
-                ssh_command(args.ssh_target, f"ss -H -ltn | grep :{host_port} || true"),
+                remote_exec_command(connection, "nvidia-smi -L"),
+                remote_exec_command(connection, "docker compose version"),
+                remote_exec_command(connection, f"ss -H -ltn | grep :{host_port} || true"),
             ],
             "verify": [
-                f"ssh -L {host_port}:127.0.0.1:{host_port} {shlex.quote(args.ssh_target)}",
+                remote_port_forward_command(connection, host_port, host_port),
                 f"python3 scripts/smoke_test_endpoint.py --base-url http://127.0.0.1:{host_port} --model {shlex.quote(str(candidate.get('served_model_name') or model_id))} --out verification_report.json",
             ],
         },
@@ -162,10 +170,10 @@ def main() -> None:
         }
         plan["commands"]["apply"] = [
             "Review deployment_plan.yaml, rendered Compose, and environment files.",
-            f"scripts/apply_vllm_compose.sh --ssh-target {shlex.quote(args.ssh_target)} --remote-dir {shlex.quote(remote_dir)} --compose {shlex.quote(args.compose_out or '<compose-file>')} --env {shlex.quote(args.env_out or '<env-file>')} --state-out applied_deployment_state.json --apply --allow-model-downloads",
+            apply_command(args, remote_dir),
         ]
-        plan["rollback"]["new_module_stop_command"] = ssh_command(
-            args.ssh_target,
+        plan["rollback"]["new_module_stop_command"] = remote_exec_command(
+            connection,
             f"docker compose --env-file {shlex.quote(remote_dir + '/deployment.env')} "
             f"-f {shlex.quote(remote_dir + '/docker-compose.yaml')} down",
         )
@@ -277,6 +285,28 @@ def env_escape(value: str) -> str:
 
 def loopback_bind(value: str) -> bool:
     return value in {"127.0.0.1", "localhost", "::1"}
+
+
+def load_connection(args: argparse.Namespace) -> dict[str, Any]:
+    if args.connection_file:
+        return normalize_connection(load_structured(args.connection_file))
+    return normalize_connection({"kind": "ssh", "target": args.ssh_target})
+
+
+def apply_command(args: argparse.Namespace, remote_dir: str) -> str:
+    compose_file = args.compose_out or "<compose-file>"
+    env_file = args.env_out or "<env-file>"
+    connection_args = (
+        f"--connection-file {shlex.quote(args.connection_file)}"
+        if args.connection_file
+        else f"--ssh-target {shlex.quote(args.ssh_target)}"
+    )
+    return (
+        "scripts/apply_vllm_compose.sh "
+        f"{connection_args} --remote-dir {shlex.quote(remote_dir)} "
+        f"--compose {shlex.quote(compose_file)} --env {shlex.quote(env_file)} "
+        "--state-out applied_deployment_state.json --apply --allow-model-downloads"
+    )
 
 
 def ssh_command(target: str, remote_command: str) -> str:
