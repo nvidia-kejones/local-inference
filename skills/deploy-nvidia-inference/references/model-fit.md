@@ -23,11 +23,14 @@ required_gpu_bytes =
   + batch_workspace_bytes
   + runtime_overhead_bytes
 
-usable_gpu_bytes =
+usable_fit_budget_bytes =
   sum(free_vram_per_selected_gpu - per_gpu_safety_reserve)
+  or conservative host MemAvailable budget on an eligible UMA snapshot
 ```
 
 The safety reserve is the larger of a per-GPU fraction and a per-GPU GiB floor. Runtime overhead is an explicit candidate override or a conservative runtime default plus a fraction of GPU-resident weights and KV cache.
+
+On a normalized UMA hint such as a DGX Spark snapshot where `nvidia-smi` framebuffer total/free facts are unavailable, v1 may use `host.memory.available_bytes` once as a conservative current-snapshot shared-memory fit budget. That fallback is explicit in `nvidia.memory_reporting.system_memory_budget_eligible`, keeps a reserve, counts CPU-resident offloaded weight bytes in the shared fit budget, and remains heuristic: it is not a device-memory reservation or an allocator guarantee.
 
 ## Candidate Memory Inputs
 
@@ -60,4 +63,4 @@ Prefer explicit data in this order:
 - `no_fit`: do not apply without changing model/runtime/precision/context/concurrency/offload assumptions.
 - `unknown`: discovery or model memory metadata is too incomplete.
 
-Keep warnings in the recommendation. A candidate with zero KV or zero weight estimate is not a high-confidence fit.
+Keep warnings in the recommendation. A candidate with zero KV or zero weight estimate is not a high-confidence fit. A shared UMA budget can reject an obviously oversized current-snapshot candidate, but it still needs runtime verification when recommending apply.

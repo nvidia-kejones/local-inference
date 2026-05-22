@@ -27,6 +27,7 @@ def main() -> None:
     gpus = parse_gpus(commands)
     driver_version = next((gpu.get("driver_version") for gpu in gpus if gpu.get("driver_version")), None)
     cuda_hint = find_cuda_version(command_stdout(commands, "nvidia_smi_table"))
+    memory_reporting = describe_memory_reporting(commands, gpus)
     facts = {
         "schema_version": "nvidia-host-facts/v1",
         "fact_scope": "read_only_discovery",
@@ -51,6 +52,7 @@ def main() -> None:
             "driver_version": driver_version,
             "cuda_version_reported_by_driver": cuda_hint,
             "gpus": gpus,
+            "memory_reporting": memory_reporting,
             "mig": {
                 "states": [
                     {
@@ -80,7 +82,7 @@ def main() -> None:
                 command_stdout(commands, "inference_processes")
             ),
         },
-        "observations": observations(commands, gpus),
+        "observations": observations(commands, gpus, memory_reporting),
     }
     write_json(facts, args.out)
 
@@ -147,7 +149,64 @@ def numeric_mib(value: Any) -> int:
 
 
 def unavailable(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"", "n/a", "not supported", "[not supported]"}
+    return str(value or "").strip().lower() in {
+        "",
+        "n/a",
+        "[n/a]",
+        "not supported",
+        "[not supported]",
+    }
+
+
+def describe_memory_reporting(
+    commands: dict[str, Any], gpus: list[dict[str, Any]]
+) -> dict[str, Any]:
+    table = command_stdout(commands, "nvidia_smi_table")
+    query_text = "\n".join(
+        [
+            command_stdout(commands, "nvidia_smi_gpu_query_extended"),
+            command_stdout(commands, "nvidia_smi_gpu_query_basic"),
+        ]
+    )
+    has_framebuffer_facts = any(
+        as_int(gpu.get("vram_total_bytes"), 0) > 0 or as_int(gpu.get("vram_free_bytes"), 0) > 0
+        for gpu in gpus
+    )
+    no_framebuffer_values = bool(gpus) and not has_framebuffer_facts
+    table_reports_unsupported = "memory-usage" in table.lower() and "not supported" in table.lower()
+    query_reports_unavailable = any(
+        marker in query_text.lower() for marker in ("[n/a]", "not supported")
+    )
+    gb10_inventory_hint = any("gb10" in str(gpu.get("name") or "").lower() for gpu in gpus)
+    unified_memory_hint = bool(
+        no_framebuffer_values
+        and table_reports_unsupported
+        and query_reports_unavailable
+        and gb10_inventory_hint
+    )
+    if has_framebuffer_facts:
+        mode = "dedicated_framebuffer"
+    elif unified_memory_hint:
+        mode = "unified_system_memory_hint"
+    else:
+        mode = "unknown"
+
+    evidence = []
+    if no_framebuffer_values:
+        evidence.append("Normalized GPU rows did not expose nonzero framebuffer total/free facts.")
+    if table_reports_unsupported:
+        evidence.append("nvidia-smi table reported Memory-Usage as Not Supported.")
+    if query_reports_unavailable:
+        evidence.append("nvidia-smi GPU memory query fields reported unavailable values.")
+    if gb10_inventory_hint:
+        evidence.append("GPU inventory includes a GB10 device name.")
+    return {
+        "mode": mode,
+        "framebuffer_memory_facts_available": has_framebuffer_facts,
+        "unified_memory_hint": unified_memory_hint,
+        "system_memory_budget_eligible": unified_memory_hint,
+        "evidence": evidence,
+    }
 
 
 def find_cuda_version(text: str) -> str | None:
@@ -292,10 +351,18 @@ def compatibility_hints(driver_version: str | None, cuda_hint: str | None) -> li
     return hints
 
 
-def observations(commands: dict[str, Any], gpus: list[dict[str, Any]]) -> list[str]:
+def observations(
+    commands: dict[str, Any],
+    gpus: list[dict[str, Any]],
+    memory_reporting: dict[str, Any],
+) -> list[str]:
     result = []
     if not gpus:
         result.append("No GPU query rows were normalized from nvidia-smi.")
+    if memory_reporting.get("mode") == "unified_system_memory_hint":
+        result.append(
+            "Dedicated framebuffer memory facts were unavailable; normalized facts allow a conservative unified-memory system budget."
+        )
     if not command_ok(commands, "docker_version"):
         result.append("Docker was unavailable or inaccessible during read-only discovery.")
     if not command_ok(commands, "nvidia_ctk_version") and not command_ok(

@@ -15,6 +15,13 @@
   "nvidia": {
     "available": true,
     "driver_version": "replace-after-probe",
+    "memory_reporting": {
+      "mode": "dedicated_framebuffer",
+      "framebuffer_memory_facts_available": true,
+      "unified_memory_hint": false,
+      "system_memory_budget_eligible": false,
+      "evidence": []
+    },
     "gpus": [
       {
         "index": 0,

@@ -21,6 +21,8 @@ PRECISION_BYTES = {
     "int8": 1.0,
     "w8a8": 1.0,
     "int4": 0.5,
+    "mxfp4": 0.5,
+    "nvfp4": 0.5,
     "awq4": 0.5,
     "gptq4": 0.5,
     "gguf-q4": 0.5,
@@ -97,8 +99,13 @@ def estimate_fit(
     required_gpu_bytes = (
         gpu_weights_bytes + kv_cache_bytes + batch_workspace_bytes + runtime_overhead_bytes
     )
-    selected_gpus, reserve_bytes, usable_gpu_bytes = _gpu_budget(host, candidate, warnings)
+    selected_gpus, reserve_bytes, usable_gpu_bytes, budget_source = _gpu_budget(
+        host, candidate, warnings
+    )
     host_ram_available = as_int(nested(host, "host", "memory", "available_bytes", default=0), 0)
+    required_fit_bytes = required_gpu_bytes
+    if budget_source == "host_memory_available_uma":
+        required_fit_bytes += cpu_weights_bytes
 
     if not selected_gpus:
         fit_class = "unknown"
@@ -106,7 +113,7 @@ def estimate_fit(
         headroom_bytes = None
         warnings.append("No normalized NVIDIA GPU free-memory facts are available.")
     else:
-        headroom_bytes = usable_gpu_bytes - required_gpu_bytes
+        headroom_bytes = usable_gpu_bytes - required_fit_bytes
         if headroom_bytes < 0:
             fit_class = "no_fit"
             fits = False
@@ -144,6 +151,10 @@ def estimate_fit(
             "batch_workspace_bytes": batch_workspace_bytes,
             "runtime_overhead_bytes": runtime_overhead_bytes,
             "required_gpu_bytes": required_gpu_bytes,
+            "required_fit_budget_bytes": required_fit_bytes,
+            "fit_budget_source": budget_source,
+            "safety_reserve_bytes": reserve_bytes,
+            "usable_fit_budget_bytes_after_reserve": usable_gpu_bytes,
             "vram_safety_reserve_bytes": reserve_bytes,
             "usable_gpu_bytes_after_reserve": usable_gpu_bytes,
             "headroom_bytes_after_reserve": headroom_bytes,
@@ -206,7 +217,15 @@ def _kv_bytes_per_token(candidate: dict[str, Any], warnings: list[str]) -> int:
 
 def _gpu_budget(
     host: dict[str, Any], candidate: dict[str, Any], warnings: list[str]
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[dict[str, Any]], int, int, str]:
+    gpu_count = as_int(
+        nested(candidate, "deployment", "gpu_count", default=0)
+        or nested(candidate, "deployment", "tensor_parallel_size", default=0),
+        0,
+    )
+    if gpu_count <= 0:
+        gpu_count = 1
+
     normalized = []
     for gpu in nested(host, "nvidia", "gpus", default=[]) or []:
         free_bytes = as_int(gpu.get("vram_free_bytes"), 0)
@@ -220,23 +239,16 @@ def _gpu_budget(
                 }
             )
     normalized.sort(key=lambda gpu: gpu["vram_free_bytes"], reverse=True)
-    gpu_count = as_int(
-        nested(candidate, "deployment", "gpu_count", default=0)
-        or nested(candidate, "deployment", "tensor_parallel_size", default=0),
-        0,
-    )
-    if gpu_count <= 0:
-        gpu_count = 1
+    if not normalized and nested(
+        host, "nvidia", "memory_reporting", "system_memory_budget_eligible", default=False
+    ):
+        return _unified_memory_budget(host, candidate, gpu_count, warnings)
+
     selected = normalized[:gpu_count]
     if len(selected) < gpu_count:
         warnings.append(f"Requested {gpu_count} GPUs but only {len(selected)} have free VRAM facts.")
 
-    reserve_fraction = as_float(
-        nested(candidate, "runtime_estimates", "vram_reserve_fraction", default=0.12), 0.12
-    )
-    reserve_gib_per_gpu = as_float(
-        nested(candidate, "runtime_estimates", "vram_reserve_gib_per_gpu", default=2.0), 2.0
-    )
+    reserve_fraction, reserve_gib_per_gpu = _reserve_policy(candidate)
     reserve_bytes = 0
     usable_bytes = 0
     for gpu in selected:
@@ -249,7 +261,65 @@ def _gpu_budget(
         warnings.append(
             "Multi-GPU fit is aggregate and approximate; confirm tensor parallel partitioning and topology."
         )
-    return selected, reserve_bytes, usable_bytes
+    return selected, reserve_bytes, usable_bytes, "gpu_vram_free"
+
+
+def _unified_memory_budget(
+    host: dict[str, Any],
+    candidate: dict[str, Any],
+    gpu_count: int,
+    warnings: list[str],
+) -> tuple[list[dict[str, Any]], int, int, str]:
+    inventory = nested(host, "nvidia", "gpus", default=[]) or []
+    if len(inventory) < gpu_count:
+        warnings.append(
+            f"Requested {gpu_count} GPUs but only {len(inventory)} GPU inventory rows are available."
+        )
+        return [], 0, 0, "unavailable"
+
+    available_bytes = as_int(nested(host, "host", "memory", "available_bytes", default=0), 0)
+    if available_bytes <= 0:
+        warnings.append("Unified-memory hint exists but host available-memory facts are missing.")
+        return [], 0, 0, "unavailable"
+
+    reserve_fraction, reserve_gib_per_gpu = _reserve_policy(candidate)
+    reserve_bytes = max(int(available_bytes * reserve_fraction), int(reserve_gib_per_gpu * GIB))
+    selected = [
+        {
+            "index": gpu.get("index"),
+            "uuid": gpu.get("uuid"),
+            "name": gpu.get("name"),
+            "budget_source": "host.memory.available_bytes",
+            "shared_memory_available_bytes": available_bytes,
+        }
+        for gpu in inventory[:gpu_count]
+    ]
+    warnings.append(
+        "Using host.memory.available_bytes as a conservative current-snapshot unified-memory budget because framebuffer free-memory facts are unavailable."
+    )
+    warnings.append(
+        "Unified-memory fit is heuristic; verify target runtime allocation behavior and host memory pressure before apply."
+    )
+    if gpu_count > 1:
+        warnings.append(
+            "Unified-memory fallback uses one shared system-memory budget across selected GPUs; confirm topology and runtime partitioning."
+        )
+    return (
+        selected,
+        reserve_bytes,
+        max(0, available_bytes - reserve_bytes),
+        "host_memory_available_uma",
+    )
+
+
+def _reserve_policy(candidate: dict[str, Any]) -> tuple[float, float]:
+    reserve_fraction = as_float(
+        nested(candidate, "runtime_estimates", "vram_reserve_fraction", default=0.12), 0.12
+    )
+    reserve_gib_per_gpu = as_float(
+        nested(candidate, "runtime_estimates", "vram_reserve_gib_per_gpu", default=2.0), 2.0
+    )
+    return reserve_fraction, reserve_gib_per_gpu
 
 
 def _target_context(workload: dict[str, Any], candidate: dict[str, Any]) -> int:
@@ -269,6 +339,8 @@ def _target_context(workload: dict[str, Any], candidate: dict[str, Any]) -> int:
 def _confidence(candidate: dict[str, Any], warnings: list[str]) -> str:
     if any("zero" in warning.lower() for warning in warnings):
         return "low"
+    if any("unified-memory" in warning.lower() for warning in warnings):
+        return "heuristic"
     if nested(candidate, "weights", "weight_bytes", default=0) and (
         nested(candidate, "kv_cache", "bytes_per_token", default=0)
         or nested(candidate, "kv_cache", "num_layers", default=0)

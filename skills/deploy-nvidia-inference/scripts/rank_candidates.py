@@ -204,7 +204,7 @@ def blockers_for(
     if nested(candidate, "license", "deployment_allowed", default=True) is False:
         blockers.append("license/deployment constraint is marked disallowed")
     if nested(fit, "decision", "fit_class", default="unknown") == "no_fit":
-        blockers.append("VRAM estimate does not fit after safety reserve")
+        blockers.append("memory fit estimate does not fit after safety reserve")
     target = as_int(nested(workload, "serving", "target_context_tokens", default=0), 0)
     max_context = as_int(candidate.get("max_context_tokens"), 0)
     if target and max_context and max_context < target:

@@ -47,6 +47,7 @@ def main() -> None:
         "presentation_guidance": [
             "Tell the user these are host-aware recommendations for the refreshed candidate set, not a permanent model catalog.",
             "Lead with the recommended model/runtime pair, why it fits this host/use case, fit confidence, and benchmark needed before deployment.",
+            "Treat needs_fit_validation as a candidate lead, not an apply-ready recommendation.",
             "Show blockers and next-best alternatives when no candidate is clearly deployable.",
         ],
     }
@@ -75,9 +76,17 @@ def recommend_for_profile(
         "workload": workload,
         "recommended": recommendation,
         "alternatives": alternatives,
-        "status": "recommended" if deployable else "no_unblocked_candidate",
+        "status": recommendation_status(recommendation, deployable),
         "notes": recommendation_notes(recommendation, deployable),
     }
+
+
+def recommendation_status(recommendation: dict[str, Any], deployable: list[dict[str, Any]]) -> str:
+    if not deployable:
+        return "no_unblocked_candidate"
+    if nested_fit_class(recommendation) == "unknown":
+        return "needs_fit_validation"
+    return "recommended"
 
 
 def recommendation_notes(recommendation: dict[str, Any], deployable: list[dict[str, Any]]) -> list[str]:
@@ -86,13 +95,23 @@ def recommendation_notes(recommendation: dict[str, Any], deployable: list[dict[s
         notes.append("Every scored candidate is blocked; use blockers to refresh the candidate set or relax workload assumptions.")
     fit = recommendation.get("fit", {})
     decision = fit.get("decision", {}) if isinstance(fit, dict) else {}
-    if decision.get("fit_class") == "tight":
-        notes.append("Top candidate is a tight VRAM fit; benchmark real prompts before apply.")
+    if decision.get("fit_class") == "unknown":
+        notes.append(
+            "Top candidate memory fit is unknown; collect bounded memory facts or validate a reviewed shared-memory budget before apply."
+        )
+    elif decision.get("fit_class") == "tight":
+        notes.append("Top candidate is a tight memory fit; benchmark real prompts before apply.")
     if decision.get("confidence") in {"low", "heuristic"}:
         notes.append("Top candidate fit confidence is not high; confirm model memory metadata.")
     if not (recommendation.get("pins") or {}).get("model_revision"):
         notes.append("Top candidate still needs a pinned model revision.")
     return notes
+
+
+def nested_fit_class(recommendation: dict[str, Any]) -> str:
+    fit = recommendation.get("fit")
+    decision = fit.get("decision") if isinstance(fit, dict) else {}
+    return str(decision.get("fit_class") or "unknown") if isinstance(decision, dict) else "unknown"
 
 
 if __name__ == "__main__":

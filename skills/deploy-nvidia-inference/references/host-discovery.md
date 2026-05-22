@@ -21,7 +21,7 @@ If remote `python3` is missing, run the same read-only commands manually or add 
 
 - `source.command_status` is evidence of what was run and whether a probe failed.
 - `host` is OS/CPU/RAM/disk.
-- `nvidia` is driver hint, CUDA compatibility hint from `nvidia-smi`, GPU inventory, MIG state, topology, and visible GPU workloads.
+- `nvidia` is driver hint, CUDA compatibility hint from `nvidia-smi`, GPU inventory, memory-reporting hints, MIG state, topology, and visible GPU workloads.
 - `containers` records runtime/toolkit visibility. Visibility is not proof the login user can perform apply operations.
 - `network` records occupied listening sockets and inference-looking processes found without service changes.
 
@@ -35,7 +35,8 @@ Before recommending apply:
 2. Check whether MIG partitions change usable memory and topology assumptions.
 3. Check whether existing inference-looking processes or occupied ports conflict with the intended endpoint.
 4. Check free VRAM and active GPU processes at the same time. Free VRAM is a snapshot, not a reservation.
-5. Treat the CUDA version printed by `nvidia-smi` as a driver compatibility hint, not the host toolkit or a guarantee that a chosen image will run.
+5. If `nvidia.memory_reporting` says framebuffer facts are unavailable but a UMA system-memory budget is eligible, review `host.memory.available_bytes` and the active workloads before treating the fit result as current-snapshot evidence.
+6. Treat the CUDA version printed by `nvidia-smi` as a driver compatibility hint, not the host toolkit or a guarantee that a chosen image will run.
 
 The probe avoids process arguments because they often carry tokens or endpoint secrets. If manual diagnosis requires command lines, collect them only after deciding how the resulting raw evidence will be protected.
 
