@@ -77,6 +77,7 @@ def main() -> None:
             "compatibility_hints": compatibility_hints(driver_version, cuda_hint),
         },
         "containers": parse_containers(commands),
+        "deployment_substrates": parse_deployment_substrates(commands),
         "network": {
             "listening_ports": parse_ports(command_stdout(commands, "listening_ports")),
             "active_inference_processes": parse_process_lines(
@@ -294,6 +295,8 @@ def parse_containers(commands: dict[str, Any]) -> dict[str, Any]:
         "docker": {
             "available": command_ok(commands, "docker_version"),
             "version_output": command_stdout(commands, "docker_version").strip(),
+            "compose_available": command_ok(commands, "docker_compose_version"),
+            "compose_version_output": command_stdout(commands, "docker_compose_version").strip(),
             "runtimes_output": runtimes_text,
             "nvidia_runtime_hint": "nvidia" in runtimes_text.lower(),
         },
@@ -313,6 +316,112 @@ def parse_containers(commands: dict[str, Any]) -> dict[str, Any]:
                 commands, "nvidia_container_cli_version"
             ).strip(),
         },
+    }
+
+
+def parse_deployment_substrates(commands: dict[str, Any]) -> dict[str, Any]:
+    kubernetes = parse_kubernetes(commands)
+    docker = parse_docker_substrate(commands)
+    native_service = parse_native_service(commands)
+    return {
+        "kubernetes": kubernetes,
+        "docker": docker,
+        "native_service": native_service,
+        "priority_order": ["kubernetes", "docker", "native_service"],
+    }
+
+
+def parse_kubernetes(commands: dict[str, Any]) -> dict[str, Any]:
+    client_available = command_ok(commands, "kubectl_version_client")
+    current_context = first_line(command_stdout(commands, "kubectl_current_context"))
+    nodes = parse_kubernetes_nodes(command_stdout(commands, "kubectl_get_nodes"))
+    cluster_reachable = command_ok(commands, "kubectl_get_nodes")
+    can_create_pods = command_stdout(commands, "kubectl_auth_create_pods").strip().lower() == "yes"
+    available = bool(client_available and cluster_reachable and can_create_pods)
+    blockers = []
+    if not client_available:
+        blockers.append("kubectl client was unavailable or failed.")
+    if client_available and not current_context:
+        blockers.append("kubectl current-context was unavailable.")
+    if client_available and not cluster_reachable:
+        blockers.append("kubectl could not read nodes for the current context.")
+    if cluster_reachable and not can_create_pods:
+        blockers.append("kubectl auth can-i create pods did not return yes.")
+    return {
+        "available": available,
+        "client_available": client_available,
+        "cluster_reachable": cluster_reachable,
+        "workload_create_allowed": can_create_pods,
+        "current_context": current_context,
+        "node_count": len(nodes),
+        "gpu_resource_hint": any(node.get("nvidia_gpu_allocatable", 0) > 0 for node in nodes),
+        "nodes": nodes,
+        "blockers": blockers,
+        "evidence": [
+            "Kubernetes is considered deployable only when kubectl exists, nodes are readable, and pods can be created."
+        ],
+    }
+
+
+def parse_kubernetes_nodes(text: str) -> list[dict[str, Any]]:
+    if not text.strip():
+        return []
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    nodes = []
+    items = payload.get("items", []) if isinstance(payload, dict) else []
+    for item in items:
+        metadata = item.get("metadata", {}) if isinstance(item, dict) else {}
+        status = item.get("status", {}) if isinstance(item, dict) else {}
+        allocatable = status.get("allocatable", {}) if isinstance(status, dict) else {}
+        gpu_value = allocatable.get("nvidia.com/gpu", 0) if isinstance(allocatable, dict) else 0
+        nodes.append(
+            {
+                "name": metadata.get("name"),
+                "nvidia_gpu_allocatable": as_int(gpu_value, 0),
+            }
+        )
+    return nodes
+
+
+def parse_docker_substrate(commands: dict[str, Any]) -> dict[str, Any]:
+    docker_available = command_ok(commands, "docker_version")
+    compose_available = command_ok(commands, "docker_compose_version")
+    nvidia_runtime = "nvidia" in command_stdout(commands, "docker_runtimes").lower()
+    blockers = []
+    if not docker_available:
+        blockers.append("Docker daemon was unavailable or inaccessible.")
+    if docker_available and not compose_available:
+        blockers.append("Docker Compose was unavailable.")
+    if docker_available and not nvidia_runtime:
+        blockers.append("Docker did not report an NVIDIA runtime hint.")
+    return {
+        "available": bool(docker_available),
+        "compose_available": compose_available,
+        "nvidia_runtime_hint": nvidia_runtime,
+        "blockers": blockers,
+        "evidence": [
+            command_stdout(commands, "docker_version").strip()[:300],
+            command_stdout(commands, "docker_compose_version").strip()[:120],
+        ],
+    }
+
+
+def parse_native_service(commands: dict[str, Any]) -> dict[str, Any]:
+    systemd_available = command_ok(commands, "systemctl_version")
+    user_systemd_available = command_ok(commands, "systemctl_user_available")
+    blockers = []
+    if not systemd_available:
+        blockers.append("systemctl was unavailable.")
+    return {
+        "available": systemd_available,
+        "systemd_available": systemd_available,
+        "user_systemd_available": user_systemd_available,
+        "preferred_mode": "user" if user_systemd_available else "system",
+        "blockers": blockers,
+        "evidence": [first_line(command_stdout(commands, "systemctl_version")) or ""],
     }
 
 
@@ -366,6 +475,12 @@ def observations(
         )
     if not command_ok(commands, "docker_version"):
         result.append("Docker was unavailable or inaccessible during read-only discovery.")
+    if not command_ok(commands, "kubectl_version_client"):
+        result.append("Kubernetes CLI was unavailable during read-only discovery.")
+    elif not command_ok(commands, "kubectl_get_nodes"):
+        result.append("Kubernetes CLI was visible but the current context was not deployable.")
+    if not command_ok(commands, "systemctl_version"):
+        result.append("systemd was unavailable during read-only discovery.")
     if not command_ok(commands, "nvidia_ctk_version") and not command_ok(
         commands, "nvidia_container_cli_version"
     ):

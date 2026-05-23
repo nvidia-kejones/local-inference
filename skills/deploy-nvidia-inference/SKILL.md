@@ -25,16 +25,17 @@ Use this skill as a staged remote-deployment workflow. Keep host facts, workload
    Start from `assets/remote_connection.example.yaml`. Use `command: ssh ...` for standard SSH, or `command: brev shell ...` / `command: brev ssh ...` for Brev-managed instances. When the connection is Brev-managed, use the Brev CLI for remote exec and copy operations.
 3. Discover the host without changing it.
    Run `scripts/probe_remote_host.sh --connection-file <run-dir>/remote_connection.yaml > <run-dir>/host_probe.raw.json`, then `python3 scripts/normalize_host_facts.py <run-dir>/host_probe.raw.json --out <run-dir>/host_facts.json`.
+   Normalized facts include deployment substrate hints for Kubernetes, Docker, and native service fallback. These are discovery facts only, not apply decisions.
 4. Refresh the recommendation basis.
    Read [runtime-selection.md](references/runtime-selection.md), [host-discovery.md](references/host-discovery.md), and [model-fit.md](references/model-fit.md). Read only the runtime reference files relevant to the candidate set you are building.
 5. Build and score candidate model/runtime pairs.
-   Create a candidate file from current primary docs and model metadata rather than a permanent "latest models" list. Use `python3 scripts/rank_candidates.py --host <run-dir>/host_facts.json --workload <run-dir>/workload_profile.yaml --candidates <run-dir>/candidate_set.json --out <run-dir>/candidate_scorecard.json` for one workload, or `python3 scripts/recommend_use_cases.py --host <run-dir>/host_facts.json --profiles <run-dir>/use_case_profiles.json --candidates <run-dir>/candidate_set.json --out <run-dir>/use_case_recommendations.json` when the user wants host-aware recommendations across use cases.
+   Create a candidate file from current primary docs and model metadata rather than a permanent "latest models" list. Use `python3 scripts/rank_candidates.py --host <run-dir>/host_facts.json --workload <run-dir>/workload_profile.yaml --candidates <run-dir>/candidate_set.json --out <run-dir>/candidate_scorecard.json` for one workload. The scorecard includes an explicit `backend_decision` for the refreshed candidate set. Use `python3 scripts/recommend_use_cases.py --host <run-dir>/host_facts.json --profiles <run-dir>/use_case_profiles.json --candidates <run-dir>/candidate_set.json --out <run-dir>/use_case_recommendations.json` when the user wants host-aware recommendations across use cases.
 6. Inspect fit estimates before recommending apply.
    Use `scripts/estimate_model_fit.py` on the winning candidate when fit is tight, KV-cache metadata is uncertain, GPU topology is awkward, MIG is active, or the runtime needs a non-default quantization path.
 7. Render a deployment plan.
-   Use `scripts/render_deployment_plan.py` to produce `<run-dir>/deployment_plan.yaml`. Pass `--connection-file <run-dir>/remote_connection.yaml` so the rendered commands match the transport. For v1 it can also render the vLLM Compose and environment files in the run directory. For SGLang, TensorRT-LLM, llama.cpp, and Ollama it emits a bounded follow-on module contract instead of pretending the deployer is implemented.
+   Use `scripts/render_deployment_plan.py` to produce `<run-dir>/deployment_plan.yaml`. Pass `--connection-file <run-dir>/remote_connection.yaml` so the rendered commands match the transport. The plan records the selected backend and selected deployment substrate. Kubernetes has priority when usable or explicitly requested, Docker is next, and native service is the fallback. For v1 it can render the vLLM Docker Compose and environment files when Docker is selected, or vLLM Kubernetes manifests with `--k8s-out` when Kubernetes is selected. Other backend/substrate combinations emit bounded follow-on module contracts instead of pretending the deployer is implemented.
 8. Apply only after the plan is acceptable.
-   Use `scripts/apply_vllm_compose.sh --connection-file <run-dir>/remote_connection.yaml --apply --allow-model-downloads ...` for the baseline vLLM Compose module, or execute reviewed plan commands for a documented manual runtime path.
+   Use `scripts/apply_vllm_compose.sh --connection-file <run-dir>/remote_connection.yaml --apply --allow-model-downloads ...` for the baseline vLLM Compose module, `scripts/apply_k8s.sh --apply --allow-model-downloads ...` for reviewed Kubernetes manifests, or execute reviewed plan commands for a documented manual runtime path.
 9. Verify and benchmark.
    Use `scripts/smoke_test_endpoint.py` for endpoint verification and `scripts/benchmark_endpoint.py` with an explicit profile before claiming the deployment performs well for the workload. Write reports into the run directory. For authenticated endpoints, prefer `--api-key-env` over placing tokens in command arguments.
 
@@ -60,11 +61,13 @@ Scripts:
 - `probe_remote_host.sh`: collect read-only SSH probe evidence.
 - `remote_connection.py`: normalize SSH and Brev connection specs and render transport-aware commands.
 - `normalize_host_facts.py`: convert raw probe evidence into host facts.
+- `deployment_selection.py`: select the serving backend/substrate pair and expose blockers for unsupported combinations.
 - `estimate_model_fit.py`: estimate weights, KV cache, batching/workspace, runtime overhead, and reserve against available VRAM.
 - `rank_candidates.py`: score current candidate pairs for workload, support, fit, license, quantization, context, and serving behavior.
 - `recommend_use_cases.py`: reuse the scorer across named workload profiles and preserve alternatives/blockers per use case.
-- `render_deployment_plan.py`: render plan output and the implemented vLLM Compose baseline.
+- `render_deployment_plan.py`: render plan output, the implemented vLLM Compose baseline, and the vLLM Kubernetes manifest baseline.
 - `apply_vllm_compose.sh`: explicit remote apply path for the vLLM Compose module.
+- `apply_k8s.sh`: explicit Kubernetes apply path for reviewed manifests.
 - `smoke_test_endpoint.py` and `benchmark_endpoint.py`: verify and measure an endpoint with auditable JSON reports.
 
 References:

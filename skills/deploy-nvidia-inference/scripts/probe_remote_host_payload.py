@@ -82,10 +82,60 @@ commands = [
     ("nvidia_driver_proc", ["cat", "/proc/driver/nvidia/version"]),
     ("docker_version", ["docker", "version", "--format", "{{json .}}"]),
     ("docker_runtimes", ["docker", "info", "--format", "{{json .Runtimes}}"]),
+    (
+        "docker_compose_version",
+        [
+            "sh",
+            "-lc",
+            "docker compose version --short 2>/dev/null || docker-compose version --short",
+        ],
+    ),
     ("containerd_version", ["containerd", "--version"]),
     ("podman_version", ["podman", "--version"]),
     ("nvidia_ctk_version", ["nvidia-ctk", "--version"]),
     ("nvidia_container_cli_version", ["nvidia-container-cli", "--version"]),
+    (
+        "kubectl_version_client",
+        [
+            "sh",
+            "-lc",
+            "command -v kubectl >/dev/null 2>&1 && kubectl version --client=true --output=json",
+        ],
+    ),
+    (
+        "kubectl_current_context",
+        [
+            "sh",
+            "-lc",
+            "command -v kubectl >/dev/null 2>&1 && kubectl config current-context",
+        ],
+    ),
+    (
+        "kubectl_auth_create_pods",
+        [
+            "sh",
+            "-lc",
+            "command -v kubectl >/dev/null 2>&1 && kubectl auth can-i create pods",
+        ],
+    ),
+    (
+        "kubectl_get_nodes",
+        [
+            "sh",
+            "-lc",
+            "command -v kubectl >/dev/null 2>&1 && kubectl get nodes -o json",
+        ],
+        45,
+    ),
+    ("systemctl_version", ["systemctl", "--version"]),
+    (
+        "systemctl_user_available",
+        [
+            "sh",
+            "-lc",
+            "command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null",
+        ],
+    ),
     (
         "listening_ports",
         [

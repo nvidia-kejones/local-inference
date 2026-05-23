@@ -14,6 +14,8 @@ Use discovery to learn what the remote NVIDIA Linux host exposes before deciding
 - Visible compute applications from `nvidia-smi`.
 - OS release, kernel, CPU, RAM, and disk paths relevant to model/container caches.
 - Docker, containerd, Podman, NVIDIA Container Toolkit, and NVIDIA container CLI visibility.
+- Kubernetes client/context visibility, node-read access, and whether the current identity can create pods.
+- Native service manager visibility for systemd-based fallback planning.
 - Listening sockets and process rows that look like inference services by executable name only.
 
 If remote `python3` is missing, run the same read-only commands manually or add a reviewed fallback collector before treating the probe as complete.
@@ -26,6 +28,7 @@ If remote `python3` is missing, run the same read-only commands manually or add 
 - `host` is OS/CPU/RAM/disk.
 - `nvidia` is driver hint, CUDA compatibility hint from `nvidia-smi`, GPU inventory, memory-reporting hints, MIG state, topology, and visible GPU workloads.
 - `containers` records runtime/toolkit visibility. Visibility is not proof the login user can perform apply operations.
+- `deployment_substrates` records Kubernetes, Docker, and native service availability hints for substrate selection.
 - `network` records occupied listening sockets and inference-looking processes found without service changes.
 
 Do not place workload preferences, recommendations, deployment commands, or benchmark conclusions in `host_facts.json`.
@@ -40,6 +43,7 @@ Before recommending apply:
 4. Check free VRAM and active GPU processes at the same time. Free VRAM is a snapshot, not a reservation.
 5. If `nvidia.memory_reporting` says framebuffer facts are unavailable but a UMA system-memory budget is eligible, review `host.memory.available_bytes` and the active workloads before treating the fit result as current-snapshot evidence.
 6. Treat the CUDA version printed by `nvidia-smi` as a driver compatibility hint, not the host toolkit or a guarantee that a chosen image will run.
+7. Treat Kubernetes, Docker, and systemd visibility as current-user deployability hints. The plan must still record apply blockers and avoid installing missing substrate components during discovery.
 
 The probe avoids process arguments because they often carry tokens or endpoint secrets. If manual diagnosis requires command lines, collect them only after deciding how the resulting raw evidence will be protected.
 

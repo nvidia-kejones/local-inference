@@ -2,7 +2,7 @@
 
 V1 implements vLLM as the first scripted deployment module because it is a practical Hugging Face/CUDA serving baseline with an OpenAI-compatible server path.
 
-## Implemented Path
+## Implemented Docker Path
 
 1. Build a current candidate with:
    - `runtime: vllm`
@@ -53,3 +53,15 @@ When pre-pulling an image to warm the cache, use the exact pinned image referenc
 ## Baseline Boundaries
 
 The module renders and applies one Compose stack. It does not configure authentication, external proxying, firewall rules, observability, autoscaling, multi-host parallelism, or vLLM tuning beyond reviewed candidate args.
+
+## Implemented Kubernetes Baseline
+
+When Kubernetes is selected, `render_deployment_plan.py` can write a vLLM manifest bundle with `--k8s-out`. The baseline renders:
+
+- A ConfigMap for non-secret model settings.
+- A Deployment using the pinned vLLM image and selected model revision.
+- GPU requests and limits using `nvidia.com/gpu`.
+- An optional `HF_TOKEN` Secret reference named `<service>-hf-token`.
+- A ClusterIP Service for port-forward based verification.
+
+Apply remains explicit through `scripts/apply_k8s.sh --apply --allow-model-downloads`. The apply helper checks `kubectl auth can-i create pods`, applies the reviewed manifest, waits for rollout, and records applied state plus a rollback command. It does not create namespaces, install GPU operators, configure ingress, create secrets, or assume cluster-admin rights.

@@ -47,6 +47,7 @@ def main() -> None:
             "path": args.candidates,
             "refresh_notes": source.get("refresh_notes") if isinstance(source, dict) else None,
         },
+        "backend_decision": backend_decision(scored, workload),
         "candidates": scored,
     }
     write_json(scorecard, args.out)
@@ -227,6 +228,50 @@ def reasons_for(
     if not nested(candidate, "deployment", "container_image", default=None):
         reasons.append("container image is not pinned yet")
     return reasons
+
+
+def backend_decision(scored: list[dict[str, Any]], workload: dict[str, Any]) -> dict[str, Any]:
+    deployable = [candidate for candidate in scored if not candidate["blocked"]]
+    selected = deployable[0] if deployable else (scored[0] if scored else None)
+    if selected is None:
+        return {
+            "status": "no_candidates",
+            "selected_candidate_id": None,
+            "selected_backend": None,
+            "rationale": ["candidate set was empty"],
+            "alternatives": [],
+            "blockers": ["candidate set was empty"],
+        }
+    status = "recommended" if deployable else "no_unblocked_candidate"
+    alternatives = [
+        {
+            "id": candidate["id"],
+            "backend": candidate["runtime"],
+            "score": candidate["score"],
+            "blocked": candidate["blocked"],
+            "blockers": candidate["blockers"],
+        }
+        for candidate in scored
+        if candidate["id"] != selected["id"]
+    ][:3]
+    rationale = [
+        f"selected highest-ranked unblocked candidate for {workload_purpose(workload)}"
+        if deployable
+        else "no unblocked candidate exists; selected highest-ranked blocked candidate for review",
+        f"backend={selected['runtime']}",
+        f"score={selected['score']}",
+        f"fit={nested(selected, 'fit', 'decision', 'fit_class', default='unknown')}",
+    ]
+    return {
+        "status": status,
+        "selected_candidate_id": selected["id"],
+        "selected_model_id": selected["model_id"],
+        "selected_backend": selected["runtime"],
+        "rationale": rationale,
+        "alternatives": alternatives,
+        "blockers": selected["blockers"],
+        "note": "This is a host/workload-specific backend decision for the refreshed candidate set, not a universal runtime ranking.",
+    }
 
 
 if __name__ == "__main__":

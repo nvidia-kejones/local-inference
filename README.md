@@ -6,7 +6,7 @@ Agent Skills for local and remote inference work.
 
 ### `deploy-nvidia-inference`
 
-Use this Agent Skill to discover a single remote NVIDIA Linux host over SSH, recommend host-aware model/runtime pairs for workloads, render a safe deployment plan, apply the vLLM Docker Compose baseline explicitly, and verify an OpenAI-compatible inference endpoint.
+Use this Agent Skill to discover a single remote NVIDIA Linux host over SSH, recommend host-aware model/runtime pairs for workloads, select a deployment substrate, render a safe deployment plan, apply implemented vLLM deployment baselines explicitly, and verify an OpenAI-compatible inference endpoint.
 
 Supported recommendation/deployment targets:
 
@@ -16,7 +16,14 @@ Supported recommendation/deployment targets:
 - llama.cpp
 - Ollama
 
-The v1 scripted apply path is vLLM Compose. The other runtimes have runtime guidance and deployment module boundaries so they can be added without weakening discovery, planning, fit estimation, or verification.
+Implemented deployment/apply baselines:
+
+- vLLM on Docker Compose
+- vLLM on Kubernetes
+
+The other runtime/substrate combinations have recommendation support and deployment module boundaries so they can be added without weakening discovery, planning, fit estimation, or verification.
+
+Deployment substrate selection is separate from serving backend selection. The skill prefers Kubernetes when available or explicitly requested, then Docker/Compose when available, then native service deployment as the fallback path. Discovery records substrate facts but does not install Kubernetes, Docker, container toolkits, or system packages.
 
 ## Install
 
@@ -142,10 +149,12 @@ The skill keeps recommendation and deployment state separate. During use it aims
 - `outputs/deploy-nvidia-inference/<run-id>/host_facts.json`
 - `outputs/deploy-nvidia-inference/<run-id>/workload_profile.yaml`
 - `outputs/deploy-nvidia-inference/<run-id>/candidate_set.json`
-- `outputs/deploy-nvidia-inference/<run-id>/candidate_scorecard.json`
+- `outputs/deploy-nvidia-inference/<run-id>/candidate_scorecard.json`, including `backend_decision`
 - `outputs/deploy-nvidia-inference/<run-id>/use_case_profiles.json` when comparing named workload profiles
 - `outputs/deploy-nvidia-inference/<run-id>/use_case_recommendations.json` when comparing named workload profiles
 - `outputs/deploy-nvidia-inference/<run-id>/deployment_plan.yaml`
+- `outputs/deploy-nvidia-inference/<run-id>/docker-compose.yaml` and `deployment.env` when rendering vLLM Compose
+- `outputs/deploy-nvidia-inference/<run-id>/kubernetes.yaml` when rendering vLLM Kubernetes
 - `outputs/deploy-nvidia-inference/<run-id>/applied_deployment_state.json` only after explicit apply
 - `outputs/deploy-nvidia-inference/<run-id>/verification_report.json`
 
@@ -173,3 +182,70 @@ python3 scripts/recommend_use_cases.py \
 ```
 
 Build each run's `candidate_set.json` from current primary runtime/model documentation and model metadata before scoring. The bundled candidate examples are schemas and test shapes, not permanent model recommendations.
+
+For a single workload scorecard with an explicit backend decision:
+
+```bash
+python3 scripts/rank_candidates.py \
+  --host "$run_dir/host_facts.json" \
+  --workload "$run_dir/workload_profile.yaml" \
+  --candidates "$run_dir/candidate_set.json" \
+  --out "$run_dir/candidate_scorecard.json"
+```
+
+Render a vLLM Docker Compose plan when Docker is selected:
+
+```bash
+python3 scripts/render_deployment_plan.py \
+  --host "$run_dir/host_facts.json" \
+  --workload "$run_dir/workload_profile.yaml" \
+  --candidate "$run_dir/selected_candidate.json" \
+  --connection-file "$run_dir/remote_connection.yaml" \
+  --out "$run_dir/deployment_plan.yaml" \
+  --compose-out "$run_dir/docker-compose.yaml" \
+  --env-out "$run_dir/deployment.env"
+```
+
+Render a vLLM Kubernetes plan when Kubernetes is selected or explicitly requested:
+
+```bash
+python3 scripts/render_deployment_plan.py \
+  --host "$run_dir/host_facts.json" \
+  --workload "$run_dir/workload_profile.yaml" \
+  --candidate "$run_dir/selected_candidate.json" \
+  --connection-file "$run_dir/remote_connection.yaml" \
+  --substrate kubernetes \
+  --out "$run_dir/deployment_plan.yaml" \
+  --k8s-out "$run_dir/kubernetes.yaml"
+```
+
+Apply is always explicit after plan review:
+
+```bash
+scripts/apply_vllm_compose.sh \
+  --connection-file "$run_dir/remote_connection.yaml" \
+  --compose "$run_dir/docker-compose.yaml" \
+  --env "$run_dir/deployment.env" \
+  --state-out "$run_dir/applied_deployment_state.json" \
+  --apply \
+  --allow-model-downloads
+
+scripts/apply_k8s.sh \
+  --manifest "$run_dir/kubernetes.yaml" \
+  --connection-file "$run_dir/remote_connection.yaml" \
+  --namespace default \
+  --deployment nvidia-inference \
+  --state-out "$run_dir/applied_deployment_state.json" \
+  --apply \
+  --allow-model-downloads
+```
+
+The Kubernetes apply helper copies the reviewed manifest to the remote connection when one is provided, checks `kubectl auth can-i create pods`, applies the manifest, waits for rollout, records service/pod evidence, and writes rollback guidance.
+
+## Development
+
+Run local validation before changing deployment selection, discovery normalization, or plan rendering:
+
+```bash
+scripts/test.sh
+```
